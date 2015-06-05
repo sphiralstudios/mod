@@ -101,6 +101,8 @@ u8 held_keys[32], key_times[256];
 typedef void(*re_t)(void);
 re_t re;
 
+// EDIT: added outmatrix, 8x8 bool 2-D Array to map triggers 1-8 to outputs 1-8 ******************************
+bool outmatrix[8][8];
 
 // NVRAM data structure located in the flash array.
 __attribute__((__section__(".flash_nvram")))
@@ -173,7 +175,14 @@ void clock(u8 phase) {
 
 			// send out
 			if(m.triggers[i] && !m.mutes[i])
-				gpio_set_gpio_pin(outs[i]);
+                
+                // EDIT: OUTPUT TRIGGERS BASED ON OUTPUT MATRIX **************************************************
+                for(j=0;j<8;j++) {
+                    if(outmatrix[i][j])
+                        gpio_set_gpio_pin(outs[j]);
+                    
+                }
+
 		}
 
 		monomeFrameDirty++;
@@ -451,6 +460,12 @@ static void handler_MonomeGridKey(s32 data) {
 
 			// print_dbg("\r\nkey count: ");
 			// print_dbg_ulong(kcount);
+            
+            // EDIT: ADDING MODE 3 - hold any column 1 then press upper-left key **********************
+            if (mode == 1 && y == 0 && z == 1) {
+                mode = 3;
+                
+            }
 
 			if(kcount == 1 && z == 1)
 				mode = 1; 
@@ -499,6 +514,12 @@ static void handler_MonomeGridKey(s32 data) {
 			  // post("\nrules", edit_row, ":", rules[edit_row]);
 			}
 		}
+        //EDIT: SET OUTMATRIX **********************************************************
+        else if(mode == 3 && x > 7) {
+            outmatrix[x-8][y] = bool(z);
+            monomeFrameDirty++;
+        }
+        
 
 		if(mode != prev_mode) {
 			monomeFrameDirty++;
@@ -569,6 +590,16 @@ static void refresh() {
 
 		monomeLedBuffer[m.rules[edit_row] * 16 + 7] = L2;
 	}
+    //EDIT:  DISPLAY OUTPUT MATRIX *************************************************
+    else if(mode == 3) {
+        for (i1=0; i1<8; i1++) {
+            for (i2=0; i2<8; i2++) {
+                if (outmatrix[i1][i2])
+                    monomeLedBuffer[i1*16 + 8 + i2] = L2;
+            }
+        }
+    }
+
 
 	monome_set_quadrant_flag(0);
 	monome_set_quadrant_flag(1);
@@ -857,6 +888,13 @@ int main(void) {
 
 		m.positions[0] = m.points[0] = 3;
 		m.trig_dests[0] = 254;
+        
+        //EDIT:  set outmatrix to default one-to-one mapping (TR 1 to Out 1, etc) *********************
+        // necessary to zero first? - should be zero from init if flash is fresh
+        for (i1=0; i1<8; i1++) {
+            outmatrix[i1][i1] = true;
+        }
+
 
 		// save all presets, clear glyphs
 		for(i1=0;i1<8;i1++) {
